@@ -1,0 +1,13 @@
+[Unit]
+Description=MobileSync Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/mobilesync
+ExecStart=/opt/mobilesync/mobilesync-server
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

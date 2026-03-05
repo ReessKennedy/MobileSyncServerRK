@@ -1,0 +1,163 @@
+name: Deploy Binary to Server (Custom Go App)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+    env:
+      APP_NAME: mobilesync-server
+      BUILD_PATH: ./cmd/server
+      OUTPUT_BIN: mobilesync-server
+      DEPLOY_PATH: /opt/mobilesync
+      GO111MODULE: "on"
+      GOWORK: "off"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if git describe --tags --always >/dev/null 2>&1; then
+            VERSION=$(git describe --tags --always)
+          else
+            VERSION=$(git rev-parse --short HEAD)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install build dependencies (CGo/sqlite3)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: false
+
+      - name: Diagnose Go environment
+        run: |
+          echo "=== Full go env ==="
+          go env
+          echo "=== Working directory ==="
+          pwd && ls -la
+          echo "=== go.mod ==="
+          cat go.mod
+          echo "=== go list module ==="
+          go list -m all 2>&1 | head -10 || true
+      - name: Debug module layout
+        run: |
+          echo "DBG-MOD:pwd=$(pwd)"
+          echo "DBG-MOD:has_internal_core=$(test -d internal/core && echo yes || echo no)"
+          echo "DBG-MOD:has_internal_core_data=$(test -d internal/core/data && echo yes || echo no)"
+          echo "DBG-MOD:has_db_pkg=$(test -d internal/core/data/db && echo yes || echo no)"
+          echo "DBG-MOD:mod_line=$(head -n 1 go.mod)"
+          echo "DBG-MOD:go_list_module=$(go list -m 2>/dev/null || true)"
+          echo "DBG-MOD:go_list_cmd_api=$(go list ./cmd/api 2>&1 | tail -n 1)"
+          echo "DBG-MOD:go_list_data=$(go list ./internal/core/data/... 2>&1 | tail -n 1)"
+
+      - name: Download dependencies
+        env:
+          CGO_ENABLED: 1
+        run: go mod download
+
+      - name: Build Go binary (linux/amd64)
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+          GOFLAGS: ""
+        run: |
+          echo "=== Is Go finding go.mod? ==="
+          go env GOMOD
+          echo "=== GOFLAGS ==="
+          go env GOFLAGS
+          echo "=== GO111MODULE ==="
+          go env GO111MODULE
+          echo "=== Does go.mod exist here? ==="
+          ls -la go.mod go.sum || echo "MISSING!"
+          echo "=== Building ==="
+          mkdir -p dist
+          go build -v -o dist/${OUTPUT_BIN} ${BUILD_PATH}
+
+      - name: Verify binary exists
+        run: |
+          if [ ! -f "dist/${OUTPUT_BIN}" ]; then
+            echo "Error: binary not found!"
+            exit 1
+          fi
+
+      - name: Sanitize version for artifact name
+        id: sanitize_version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SANITIZED=$(echo "$VERSION" | sed 's/[\/\\:*?"<>|]/-/g' | sed 's/^[.-]*//;s/[.-]*$//')
+          echo "sanitized=$SANITIZED" >> $GITHUB_OUTPUT
+          echo "Original version: $VERSION"
+          echo "Sanitized version: $SANITIZED"
+
+      - name: Upload binary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobilesync-server-linux-amd64-${{ steps.sanitize_version.outputs.sanitized }}
+          path: dist/${{ env.OUTPUT_BIN }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Deploy binary to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: "dist/${{ env.OUTPUT_BIN }}"
+          target: ${{ env.DEPLOY_PATH }}
+          strip_components: 1
+
+      - name: Deploy systemd service file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: ".github/systemd/mobilesync-server.service"
+          target: "/tmp"
+          strip_components: 2
+
+      - name: Set permissions and restart service (placeholder)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            set -e
+            echo "Starting deployment..."
+            DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+            BINARY_PATH="${DEPLOY_PATH}/${{ env.OUTPUT_BIN }}"
+            SERVICE_NAME="mobilesync-server"
+
+            sudo mkdir -p "$DEPLOY_PATH"
+            sudo chmod +x "$BINARY_PATH"
+
+            if [ -f "/tmp/mobilesync-server.service" ]; then
+              sudo install -m 644 /tmp/mobilesync-server.service /etc/systemd/system/${SERVICE_NAME}.service
+            fi
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable ${SERVICE_NAME}.service
+            sudo systemctl restart ${SERVICE_NAME}.service
+            sudo systemctl status ${SERVICE_NAME}.service --no-pager || true
