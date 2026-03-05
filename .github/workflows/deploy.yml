@@ -125,6 +125,17 @@ jobs:
           target: ${{ env.DEPLOY_PATH }}
           strip_components: 1
 
+      - name: Deploy migrations
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: "migrations"
+          target: ${{ env.DEPLOY_PATH }}
+          strip_components: 0
+
       - name: Deploy systemd service file
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -153,6 +164,12 @@ jobs:
             sudo mkdir -p "$DEPLOY_PATH"
             sudo chown root:root "$BINARY_PATH"
             sudo chmod 700 "$BINARY_PATH"
+
+            if [ -d "${DEPLOY_PATH}/migrations" ]; then
+              sudo chown -R root:root "${DEPLOY_PATH}/migrations"
+              sudo chmod 755 "${DEPLOY_PATH}/migrations"
+              sudo chmod 644 "${DEPLOY_PATH}/migrations"/*.sql || true
+            fi
 
             if [ -f "${DEPLOY_PATH}/.env" ]; then
               sudo chown root:root "${DEPLOY_PATH}/.env"
