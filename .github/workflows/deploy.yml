@@ -151,7 +151,13 @@ jobs:
             SERVICE_NAME="mobilesync-server"
 
             sudo mkdir -p "$DEPLOY_PATH"
-            sudo chmod +x "$BINARY_PATH"
+            sudo chown root:root "$BINARY_PATH"
+            sudo chmod 700 "$BINARY_PATH"
+
+            if [ -f "${DEPLOY_PATH}/.env" ]; then
+              sudo chown root:root "${DEPLOY_PATH}/.env"
+              sudo chmod 600 "${DEPLOY_PATH}/.env"
+            fi
 
             if [ -f "/tmp/mobilesync-server.service" ]; then
               sudo install -m 644 /tmp/mobilesync-server.service /etc/systemd/system/${SERVICE_NAME}.service
