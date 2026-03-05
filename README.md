@@ -24,3 +24,8 @@ go run ./cmd/server
 - `GET /sync/pull?cursor=0&limit=500`
 
 This is a proof of concept and accepts any requests (no auth).
+
+## Docs
+
+- OpenAPI spec: `openapi.yaml`
+- Sync overview: `docs/sync-overview.md`

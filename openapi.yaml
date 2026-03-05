@@ -1,0 +1,235 @@
+openapi: 3.0.3
+info:
+  title: MobileSyncServerRK Sync API
+  version: 0.1.0
+  description: |
+    Minimal local-first sync API (no auth). Provides push and pull endpoints
+    for exchanging change events between a mobile client and the server.
+servers:
+  - url: http://localhost:8080
+paths:
+  /sync/push:
+    post:
+      summary: Push client changes
+      description: |
+        Accepts a batch of change events from a client. Events are idempotent by event_id.
+        For entity_type "note", the payload is applied to the canonical notes table.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushRequest'
+            examples:
+              notes-upsert:
+                summary: Upsert a note
+                value:
+                  client_id: "c8c4f7b4-1a2b-4e0f-8a9f-9e2a2d8d1f8c"
+                  events:
+                    - event_id: "b7a8f2e1-8b6c-4f1c-9a77-2e0b5b1f5d2a"
+                      entity_type: "note"
+                      entity_id: "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+                      op: "upsert"
+                      payload:
+                        id: "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+                        type: "text"
+                        text: "Buy milk"
+                        is_completed: false
+                        created_at: "2026-03-05T14:22:01.123456Z"
+                        updated_at: "2026-03-05T14:22:01.123456Z"
+                        deleted_at: null
+                        server_id: null
+                        version: 1
+                        client_id: "c8c4f7b4-1a2b-4e0f-8a9f-9e2a2d8d1f8c"
+      responses:
+        '200':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        '400':
+          description: Invalid JSON
+        '405':
+          description: Method not allowed
+        '500':
+          description: Server error
+  /sync/pull:
+    get:
+      summary: Pull server changes
+      description: |
+        Returns changes after a cursor. The cursor corresponds to the changes.id value.
+        Default limit is 500; max limit is 1000.
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: integer
+            format: uint64
+          required: false
+          description: Last seen changes cursor. Only changes with id > cursor are returned.
+          example: 0
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+          required: false
+          description: Max number of changes to return (default 500).
+          example: 500
+      responses:
+        '200':
+          description: A page of changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullResponse'
+              examples:
+                notes-changes:
+                  summary: Note changes since cursor
+                  value:
+                    next_cursor: 42
+                    changes:
+                      - id: 41
+                        entity_type: "note"
+                        entity_id: "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+                        op: "upsert"
+                        payload:
+                          id: "a1b2c3d4-5678-90ab-cdef-1234567890ab"
+                          type: "text"
+                          text: "Buy milk"
+                          is_completed: false
+                          created_at: "2026-03-05T14:22:01.123456Z"
+                          updated_at: "2026-03-05T14:22:01.123456Z"
+                          deleted_at: null
+                          server_id: null
+                          version: 1
+                          client_id: "c8c4f7b4-1a2b-4e0f-8a9f-9e2a2d8d1f8c"
+        '405':
+          description: Method not allowed
+        '500':
+          description: Server error
+components:
+  schemas:
+    PushRequest:
+      type: object
+      required: [client_id, events]
+      properties:
+        client_id:
+          type: string
+          format: uuid
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushEvent'
+    PushEvent:
+      type: object
+      required: [event_id, entity_type, entity_id, op, payload]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        entity_type:
+          type: string
+          example: note
+        entity_id:
+          type: string
+          format: uuid
+        op:
+          type: string
+          enum: [upsert, delete]
+        payload:
+          type: object
+          additionalProperties: true
+          description: Entity payload (for notes, see NotePayload schema fields).
+    PullResponse:
+      type: object
+      required: [next_cursor, changes]
+      properties:
+        next_cursor:
+          type: integer
+          format: uint64
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Change'
+    Change:
+      type: object
+      required: [id, entity_type, entity_id, op, payload]
+      properties:
+        id:
+          type: integer
+          format: uint64
+        entity_type:
+          type: string
+          example: note
+        entity_id:
+          type: string
+          format: uuid
+        op:
+          type: string
+          enum: [upsert, delete]
+        payload:
+          type: object
+          additionalProperties: true
+    NotePayload:
+      type: object
+      description: Canonical note fields stored in the notes table.
+      required: [id, type, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        body:
+          type: string
+          nullable: true
+        type:
+          type: string
+          example: text
+        text:
+          type: string
+          nullable: true
+        audio_file_name:
+          type: string
+          nullable: true
+        audio_duration:
+          type: number
+          format: double
+          nullable: true
+        photo_file_name:
+          type: string
+          nullable: true
+        is_completed:
+          type: boolean
+        transcription:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        server_id:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          type: integer
+          nullable: true
+        client_id:
+          type: string
+          format: uuid
+          nullable: true
