@@ -135,7 +135,11 @@ func normalizeNotePayload(payload map[string]any, fallbackID string) map[string]
 	// Timestamps: accept RFC3339 strings or epoch seconds
 	params["created_at"] = timeOr(payload, now, "created_at", "createdAt")
 	params["updated_at"] = timeOr(payload, now, "updated_at", "updatedAt")
-	params["deleted_at"] = timeOrNullable(payload, "deleted_at", "deletedAt")
+	if t, ok := timeOrNullable(payload, "deleted_at", "deletedAt"); ok {
+		params["deleted_at"] = t
+	} else {
+		params["deleted_at"] = nil
+	}
 
 	return params
 }
