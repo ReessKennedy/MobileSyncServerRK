@@ -53,10 +53,10 @@ func (s *Service) Push(req models.PushRequest) error {
 				_, err = tx.NamedExec(`
                     INSERT INTO notes (
                         id, title, body, type, text, audio_file_name, audio_duration, photo_file_name,
-                        is_completed, transcription, created_at, updated_at, deleted_at, server_id, version, client_id
+                        is_completed, transcription, created_at, updated_at, deleted_at, server_id, public_id, version, client_id
                     ) VALUES (
                         :id, :title, :body, :type, :text, :audio_file_name, :audio_duration, :photo_file_name,
-                        :is_completed, :transcription, :created_at, :updated_at, :deleted_at, :server_id, :version, :client_id
+                        :is_completed, :transcription, :created_at, :updated_at, :deleted_at, :server_id, :public_id, :version, :client_id
                     )
                     ON DUPLICATE KEY UPDATE
                         title = VALUES(title),
@@ -72,6 +72,7 @@ func (s *Service) Push(req models.PushRequest) error {
                         updated_at = VALUES(updated_at),
                         deleted_at = VALUES(deleted_at),
                         server_id = VALUES(server_id),
+                        public_id = VALUES(public_id),
                         version = VALUES(version),
                         client_id = VALUES(client_id)
                 `, params)
@@ -129,8 +130,9 @@ func normalizeNotePayload(payload map[string]any, fallbackID string) map[string]
 	params["is_completed"] = boolOr(payload, false, "is_completed", "isCompleted")
 
 	// IDs
-	params["server_id"] = first(payload, "server_id", "serverId")
-	params["client_id"] = first(payload, "client_id", "clientId")
+    params["server_id"] = first(payload, "server_id", "serverId")
+    params["public_id"] = first(payload, "public_id", "publicId")
+    params["client_id"] = first(payload, "client_id", "clientId")
 
 	// Timestamps: accept RFC3339 strings or epoch seconds
 	params["created_at"] = timeOr(payload, now, "created_at", "createdAt")

@@ -14,9 +14,11 @@ CREATE TABLE IF NOT EXISTS notes (
   updated_at DATETIME(6) NOT NULL,
   deleted_at DATETIME(6) NULL,
   server_id CHAR(36) NULL,
+  public_id CHAR(11) NULL,
   version INT NULL,
   client_id CHAR(36) NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS notes_public_id_idx ON notes(public_id);
 
 -- Changes table (cursor)
 CREATE TABLE IF NOT EXISTS changes (

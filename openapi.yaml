@@ -39,6 +39,7 @@ paths:
                         updated_at: "2026-03-05T14:22:01.123456Z"
                         deleted_at: null
                         server_id: null
+                        public_id: "a1B2c3D4e5F"
                         version: 1
                         client_id: "c8c4f7b4-1a2b-4e0f-8a9f-9e2a2d8d1f8c"
       responses:
@@ -108,6 +109,7 @@ paths:
                           updated_at: "2026-03-05T14:22:01.123456Z"
                           deleted_at: null
                           server_id: null
+                          public_id: "a1B2c3D4e5F"
                           version: 1
                           client_id: "c8c4f7b4-1a2b-4e0f-8a9f-9e2a2d8d1f8c"
         '405':
@@ -225,6 +227,10 @@ components:
         server_id:
           type: string
           format: uuid
+          nullable: true
+        public_id:
+          type: string
+          description: 11-character base62 public ID
           nullable: true
         version:
           type: integer
