@@ -15,7 +15,8 @@ import (
 )
 
 func main() {
-    migrate := flag.Bool("migrate", false, "run DB migrations and exit")
+    migrateOnly := flag.Bool("migrate", false, "run DB migrations and exit")
+    noMigrate := flag.Bool("no-migrate", false, "disable auto-migrate on startup")
     flag.Parse()
 
     _ = godotenv.Load()
@@ -35,12 +36,19 @@ func main() {
         log.Fatal(err)
     }
 
-    if *migrate {
+    if *migrateOnly {
         if err := db.RunMigrations(database, "migrations"); err != nil {
             log.Fatal(err)
         }
         fmt.Println("migrations applied")
         return
+    }
+
+    if !*noMigrate {
+        if err := db.RunMigrations(database, "migrations"); err != nil {
+            log.Fatal(err)
+        }
+        log.Println("auto-migrate complete")
     }
 
     svc := &syncsvc.Service{DB: database}
